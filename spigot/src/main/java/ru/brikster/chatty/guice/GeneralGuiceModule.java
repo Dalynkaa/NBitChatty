@@ -48,6 +48,11 @@ import ru.brikster.chatty.chat.message.transform.stage.early.CooldownStrategy;
 import ru.brikster.chatty.chat.message.transform.stage.early.RemoveChatSymbolStrategy;
 import ru.brikster.chatty.chat.message.transform.stage.early.SpyModeStrategy;
 import ru.brikster.chatty.chat.message.transform.stage.early.moderation.AdModerationStrategyModeration;
+import ru.brikster.chatty.chat.replacer.InlineReplacersComponentTransformer;
+import ru.brikster.chatty.chat.replacer.InlineReplacersProcessor;
+import ru.brikster.chatty.chat.replacer.impl.BalanceInlineReplacer;
+import ru.brikster.chatty.chat.replacer.impl.ItemInHandInlineReplacer;
+import ru.brikster.chatty.chat.replacer.impl.PositionInlineReplacer;
 import ru.brikster.chatty.chat.message.transform.stage.early.moderation.CapsModerationStrategy;
 import ru.brikster.chatty.chat.message.transform.stage.early.moderation.SwearModerationStrategyModeration;
 import ru.brikster.chatty.chat.message.transform.stage.late.papi.PlaceholdersStrategy;
@@ -305,6 +310,7 @@ public final class GeneralGuiceModule extends AbstractModule {
     public PlaceholdersComponentTransformer placeholdersComponentTransformer(ReplacementsConfig replacementsConfig,
                                                                              ComponentStringConverter componentStringConverter,
                                                                              ReplacementsStringTransformer replacementsStringTransformer,
+                                                                             InlineReplacersProcessor inlineReplacersProcessor,
                                                                              Logger logger) {
         List<PlaceholdersComponentTransformer> transformerList = new LinkedList<>();
 
@@ -321,6 +327,9 @@ public final class GeneralGuiceModule extends AbstractModule {
         if (Bukkit.getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
             transformerList.add(new CommonChatPlaceholderApiComponentTransformer(componentStringConverter));
         }
+
+        // Add inline replacers transformer
+        transformerList.add(new InlineReplacersComponentTransformer(inlineReplacersProcessor));
 
         return new ChainPlaceholdersComponentTransformer(transformerList);
     }
@@ -347,6 +356,24 @@ public final class GeneralGuiceModule extends AbstractModule {
         return Bukkit.getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")
                 ? new PlaceholderApiRelationalComponentTransformer(componentStringConverter)
                 : new DummyRelationalPlaceholdersComponentTransformer();
+    }
+
+    @Provides
+    @Singleton
+    public InlineReplacersProcessor inlineReplacersProcessor(Plugin plugin) {
+        InlineReplacersProcessor processor = new InlineReplacersProcessor();
+        
+        // Register built-in replacers
+        processor.register(new PositionInlineReplacer());
+        processor.register(new ItemInHandInlineReplacer());
+        
+        // Only register balance replacer if Vault is available
+        if (Bukkit.getPluginManager().isPluginEnabled("Vault")) {
+            plugin.getLogger().log(Level.INFO, "Vault detected, enabling balance inline replacer");
+            processor.register(new BalanceInlineReplacer());
+        }
+        
+        return processor;
     }
 
     private <ConfigT extends OkaeriConfig> ConfigT createConfig(Class<ConfigT> configClass, String fileName) {
